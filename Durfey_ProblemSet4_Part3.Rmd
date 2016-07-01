@@ -1,0 +1,91 @@
+---
+title: 'Adv. Data Mining - Problem Set 4: Part 3'
+author: "Ryan Durfey"
+date: "Wednesday, April 29, 2015"
+output: html_document
+---
+
+## ISLR Chapter 5 - Exercise 8
+### Part A
+```{r}
+## generate simulated data
+set.seed(1)
+y<-rnorm(100)
+x<-rnorm(100)
+y<-x-2*x^2+rnorm(100)
+```
+
+with this data set, n = 100 and p = 2 (one for each part of the equation that includes an x).
+
+$$Y = X -2X^2 + \epsilon$$
+
+### Part B
+```{r}
+## scatterplot of X against Y
+plot(x,y)
+```
+
+There looks to be a quadratic relationship between x and y. x values range from -2 to +2 and y from around -9 to +3.
+
+### Part C
+```{r}
+## set random seed
+set.seed(987123)
+
+library(boot)
+library(knitr)
+
+data<-data.frame(x,y)
+cv.error<-c()
+for(i in 1:5){
+        mod<-glm(y~poly(x,i),data=data)
+        cv.error<-rbind(cv.error,cv.glm(data,mod)$delta)
+}
+#cv.error
+
+cve<-data.frame(cv.error,row.names=c("Poly1","Poly2","Poly3","Poly4","Poly5"))
+names(cve)<-c("Raw CV Pred Error","Adjusted CV Pred Error")
+kable(cve)
+
+```
+
+### Part D
+```{r}
+## repeating part C with a different seed
+set.seed(123789)
+
+data<-data.frame(x,y)
+cv.error<-c()
+mods<-c()
+for(i in 1:5){
+        mod<-glm(y~poly(x,i),data=data)
+        cv.error<-rbind(cv.error,cv.glm(data,mod)$delta)
+}
+#cv.error
+
+cve<-data.frame(cv.error,row.names=c("Poly1","Poly2","Poly3","Poly4","Poly5"))
+names(cve)<-c("Raw CV Pred Error","Adjusted CV Pred Error")
+kable(cve)
+```
+
+Here we see our results are identical to those we obvserved in Part C. This is due to the fact that LOOCV evaluates n-folds and thus goes through every data point. Changing the seed will not affect this.
+
+### Part E
+The model with polynomial level 2 has the lowest LOOCV error. This comes as no surprise because our initial scatterplot of the data suggested a quadratic relationship.
+
+### Part F
+```{r}
+##  load at the significance levels of coefficients in each of the models created in part C
+glm.mod = glm(y~poly(x,1),data=data)
+summary(glm.mod)
+glm.mod = glm(y~poly(x,2),data=data)
+summary(glm.mod)
+glm.mod = glm(y~poly(x,3),data=data)
+summary(glm.mod)
+glm.mod = glm(y~poly(x,4),data=data)
+summary(glm.mod)
+glm.mod = glm(y~poly(x,5),data=data)
+summary(glm.mod)
+```
+
+The statistical significance of the coefficients in each model agrees with the cross-validation results. We can clearly see that in the poly-2 model and above, the first two coefficients - corresponding to X and X^2 - are significant, while the higher order polynomial coefficients are not.

@@ -1,0 +1,98 @@
+---
+title: "Adv. Data Mining - Problem Set 5 Part 3"
+author: "Ryan Durfey"
+date: "Wednesday, May 06, 2015"
+output: html_document
+---
+## ISLR Chapter 6 Exercise 10
+```{r}
+## generate simulated dataset
+set.seed(4)
+p<-20
+n<-1000
+x<-matrix(rnorm(n*p),n,p)
+head(x)
+b<-rnorm(p)
+b[2]<-0
+b[7]<-0
+b[8]<-0
+b[9]<-0
+b[15]<-0
+b[17]<-0
+eps<-rnorm(p)
+y<-x%*%b+eps
+head(y)
+
+
+## create training and test samples, 100 training obs and 900 test obs
+samp<-sample(1:nrow(x),100)
+x.train<-x[samp,]
+y.train<-y[samp]
+x.test<-x[-samp,]
+y.test<-y[-samp]
+
+
+## best subset selection on training set
+## use regsubsets
+library(leaps)
+regfit.full<-regsubsets(y~.,data=data.frame(x=x.train,y=y.train),nvmax=p)
+validation.errors<-rep(NA,p)
+x.cols<-colnames(x,do.NULL=F,prefix="x.")
+for(i in 1:p){
+        coefficients<-coef(regfit.full,id=i)
+        pred<-as.matrix(x.train[,x.cols%in%names(coefficients)])%*%
+                coefficients[names(coefficients)%in%x.cols]
+        validation.errors[i]<-mean((y.train-pred)^2)
+}
+## plot training set MSE with best model of each size
+plot(validation.errors,pch=19,type="b",ylab="Training Set MSE",
+     xlab="No. of Coefficients")
+
+
+## plot test set MSE for best model of each size
+validation.errors<-rep(NA,p)
+for(i in 1:p){
+        coeffs<-coef(regfit.full,id=i)
+        pred<-as.matrix(x.test[,x.cols%in%names(coeffs)])%*%
+                coeffs[names(coeffs)%in%x.cols]
+        validation.errors[i]<-mean((y.test-pred)^2)
+}
+plot(validation.errors,ylab="Test Set MSE",xlab="No. of Coefficients",pch=19,type="b")
+
+
+## determine which model size minimizes test MSE
+which.min(validation.errors)
+```
+
+The 15 parameter model has the smallest test MSE. However, it is worth noting that the 12 through 20 parameter models all have an extremely similar test MSE. So much so that they look nearly identical via the graph alone.
+
+```{r}
+set.seed(4)
+## observe the coefficients chosen in the best model with lowest test MSE
+coef(regfit.full,id=15)
+
+```
+
+The coefficients that are actually set to zero in the data are variables x.2, x.7, x.8, x.9, x.15, and x.17, making our true model with which the data was generated have 14 non-zero coefficients. While our predicted model doesn't meet this number of coefficients exactly, it only missed 1 out of the 6 specific variables that were set to zero: x.2. From the coefficients above, we see that the model zeroed x.7, x.8, x.9, x.15, and x.17.
+
+```{r}
+set.seed(4)
+## create plot displaying equation specified in exercise to represent total error between estimated and true coefficients
+validation.errors<-rep(NA,p)
+a1<-rep(NA,p)
+a2<-rep(NA,p)
+for(i in 1:p){
+        coeffs<-coef(regfit.full,id=i)
+        a1[i]<-length(coeffs)-1
+        a2[i]<-sqrt(sum((b[x.cols%in%names(coeffs)]
+                         -coeffs[names(coeffs)%in%x.cols])^2)+
+                            sum(b[!(x.cols%in%names(coeffs))])^2)
+}
+plot(x=a1,y=a2,xlab="No. of Coefficients",ylab="Error Between Estimated & True Coefficients",type="b",pch=19)
+which.min(a2)
+```
+
+Here, the model that minimizes the error between the estimated and true coefficients is the 12 coefficient model. This is not the same as the model that exhibited the lowest test MSE, the 15 coefficient model, but it isn't incredibly far off from it. Furthermore, if we order the models that minimize this error between estimated and true coefficients - see below - we observe that the next best model is the same as the test MSE minimized model: 15 coefficients. Overall, a model that has a better fit of true coefficients may not mean that it will have a lower test MSE.
+```{r}
+data.frame("Num_of_Coeffs"=order(a2),"Est._and_True_Coeffs_Error"=a2[order(a2)])
+```

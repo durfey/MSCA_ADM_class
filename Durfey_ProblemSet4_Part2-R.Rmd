@@ -1,0 +1,146 @@
+---
+title: 'Adv. Data Mining - Problem Set 4: Part 2-R'
+author: "Ryan Durfey"
+date: "Wednesday, April 29, 2015"
+output: html_document
+---
+
+### ISLR Chapter 5 - Exercise 5
+```{r}
+library(ISLR)
+data(Default)
+```
+
+#### Part A
+```{r}
+set.seed(132435)
+
+log.mod<-glm(default~income+balance,data=Default,family=binomial)
+```
+
+#### Part B
+```{r}
+## split dataset into training and validation sets
+## using 70%-30% train-test split
+set.seed(132435)
+samp<-sample(1:nrow(Default),.7*nrow(Default))
+Train<-Default[samp,]
+Validation<-Default[-samp,]
+
+## logistic model using training set
+log.mod.train<-glm(default~income+balance,data=Train,family=binomial)
+
+## get predictions through posterior probabilities w/ threshold of 0.5
+pred.probs<-predict(log.mod.train,newdata=Validation,type="response")
+predictions<-pred.probs
+predictions[predictions>0.5]<-"Yes"
+predictions[predictions!="Yes"]<-"No"
+table(predictions)
+
+## calculate test error
+test.error.b<-mean(predictions != Validation$default)
+test.error.b
+```
+
+#### Part C
+```{r}
+## repeat part B, 3 times, each with a different train/test split
+## change seed to obtain new train indices
+
+#####
+# 1 #
+##### using new seed
+set.seed(243546)
+samp<-sample(1:nrow(Default),.7*nrow(Default))
+Train<-Default[samp,]
+Validation<-Default[-samp,]
+
+## logistic model
+log.mod.train<-glm(default~income+balance,data=Train,family=binomial)
+
+## predictions on Validation set
+pred.probs<-predict(log.mod.train,newdata=Validation,type="response")
+predictions<-pred.probs
+predictions[predictions>0.5]<-"Yes"
+predictions[predictions!="Yes"]<-"No"
+
+## test error
+test.error.1<-mean(predictions != Validation$default)
+test.error.1
+
+#####
+# 2 #
+#####
+set.seed(354657)
+samp<-sample(1:nrow(Default),.7*nrow(Default))
+Train<-Default[samp,]
+Validation<-Default[-samp,]
+
+## logistic model
+log.mod.train<-glm(default~income+balance,data=Train,family=binomial)
+
+## predictions on Validation set
+pred.probs<-predict(log.mod.train,newdata=Validation,type="response")
+predictions<-pred.probs
+predictions[predictions>0.5]<-"Yes"
+predictions[predictions!="Yes"]<-"No"
+
+## test error
+test.error.2<-mean(predictions != Validation$default)
+test.error.2
+
+#####
+# 3 #
+#####
+set.seed(465768)
+samp<-sample(1:nrow(Default),.7*nrow(Default))
+Train<-Default[samp,]
+Validation<-Default[-samp,]
+
+## logistic model
+log.mod.train<-glm(default~income+balance,data=Train,family=binomial)
+
+## predictions on Validation set
+pred.probs<-predict(log.mod.train,newdata=Validation,type="response")
+predictions<-pred.probs
+predictions[predictions>0.5]<-"Yes"
+predictions[predictions!="Yes"]<-"No"
+
+## test error
+test.error.3<-mean(predictions != Validation$default)
+test.error.3
+
+## compare the 3 test errors
+rbind(test.error.1,test.error.2,test.error.3)
+plot(rbind(test.error.1,test.error.2,test.error.3))
+```
+
+With each split fo the data into Train and Validation sets, we find different test errors. The range of these three iterations is from 2.46% to 2.83%, which is still different than the first time we did this in part B. The moral of the story is that the Validation Set Approach is affected by the random sampling of the original data set into the Train and Validation sets.
+
+#### Part D
+````{r}
+## logistic regression model, adding student
+## note: glm() automatically takes Factor variables and turns them into dummy variables, so we do not need to manually encode them
+
+## we'll use the same seed as in part B
+set.seed(132435)
+samp<-sample(1:nrow(Default),.7*nrow(Default))
+Train<-Default[samp,]
+Validation<-Default[-samp,]
+
+log.mod.d<-glm(default~income+balance+student,data=Train,family=binomial)
+
+pred.probs<-predict(log.mod.d,newdata=Validation,type="response")
+predictions<-pred.probs
+predictions[predictions>0.5]<-"Yes"
+predictions[predictions!="Yes"]<-"No"
+
+## test error
+test.error.d<-mean(predictions != Validation$default)
+test.error.d
+
+## compare with test error from part b
+rbind(test.error.b,test.error.d)
+```
+
+After including the dummy variable, student, our test error is extremely close to what we get with the model that omitted that variable. Including student actually contributes to a very small increase in test rate. Thus, we can easily conclude that adding that variable does not aid our model in its prediction accuracy.

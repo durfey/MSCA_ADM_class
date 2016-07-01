@@ -1,0 +1,37 @@
+---
+title: 'Adv Data Mining - Problem Set 8: Part 2'
+author: "Ryan Durfey"
+date: "Wednesday, May 27, 2015"
+output: html_document
+---
+
+## ISLR Chapter 10, Excercise 9
+
+```{r}
+library(ISLR)
+set.seed(132435)
+data(USArrests)
+
+## part A
+hclusted.complete<-hclust(dist(USArrests),method="complete")
+plot(hclusted.complete)
+
+## part B
+cutree(hclusted.complete,3) ## cuts tree so that there are 3 clusters & shows which cluster each state is in
+table(cutree(hclusted.complete,3)) ## show how many states are in each cluster
+
+## part C
+data.scaled<-scale(USArrests)
+scaled.hclusted.complete<-hclust(dist(data.scaled),method="complete")
+plot(scaled.hclusted.complete)
+
+## part D
+# check to see if scaling the variables affected the tree & clusters
+cutree(scaled.hclusted.complete,3)
+table(cutree(scaled.hclusted.complete,3))
+
+# compare total cluster counts of scaled & non-scaled trees
+table(cutree(scaled.hclusted.complete,3),cutree(hclusted.complete,3))
+```
+
+From the comparisons above, it appears that scaling the variables does indeed affect the clusters of the tree obtained. This is likely due to the fact that the units of the variables are different. For example, UrbanPop is a total population of an area whereas the other three variables are all a rate of Murder/Assault/Rape per 100,000 people. For this reason, scaling the variables makes sense and should be done prior to hierarchical clustering.

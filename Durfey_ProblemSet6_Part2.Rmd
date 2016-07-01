@@ -1,0 +1,78 @@
+---
+title: 'Adv Data Mining - Problem Set 6: Part 2'
+author: "Ryan Durfey"
+date: "Wednesday, May 13, 2015"
+output: html_document
+---
+
+## ISLR Chapter 8 Exercise 9
+
+```{r}
+## A
+library(ISLR)
+data(OJ)
+set.seed(409)
+samp<-sample(1:nrow(OJ),800)
+train<-OJ[samp,]
+test<-OJ[-samp,]
+
+## B
+library(tree)
+tree.OJ<-tree(Purchase~.,data=train)
+summary(tree.OJ)
+## This tree only uses 3 of the variables: LoyalCH, PriceDiff, and ListPriceDiff.
+## The training error rate is 0.17 and the tree has 8 terminal nodes
+
+
+## C
+tree.OJ
+## Looking at the terminal node labeled '24', we see the splitting value is 0.115 for the variable PriceDiff. The number of observations at this terminal node is 14 and the deviance for the points contained in the region below it is 19.12. Furthermore, the prediction at this node is Purchase=CH with 57.14% of the points containing this value, which means that the remaining 42.86% of points hold the value 'MM'. This is not a very distinctive split, so this node is a little ambiguous with its predictions.
+
+
+## D
+plot(tree.OJ)
+text(tree.OJ)
+## We see that the tree's first three splits all split on the variable LoyalCH. As such, this variable likely has high importance in predicting the Purchase value.
+
+
+## E
+tree.pred<-predict(tree.OJ,newdata=test,type="class")
+table(test$Purchase,tree.pred)
+unpruned.pred<-predict(tree.OJ,newdata=test,type="class")
+unpruned.miss<-sum(test$Purchase != unpruned.pred)
+unpruned.miss/length(unpruned.pred)
+## The test error rate is 0.2185
+
+
+## F
+tree.cv<-cv.tree(tree.OJ,FUN=prune.tree)
+
+
+## G
+plot(tree.cv$size, tree.cv$dev, type="b", xlab="Size", ylab="Deviance")
+
+
+## H
+## A size of 7 gives the lowest cross-validation error exhibited by deviance. This means that we will not be pruning our tree much. But, hopefully, we may end up with a slightly lower test error rate.
+
+
+## I
+tree.pruned<-prune.tree(tree.OJ,best=7)
+
+
+## J
+summary(tree.pruned)
+## The misclassifcation error rate of the pruned tree is 0.1725, which is slightly higher that what we observed earlier with the full unpruned tree. This is a little unexpected since the cross-validation error for the 7-node tree was seen to be lower than the 8-node tree.
+
+
+## K
+unpruned.pred<-predict(tree.OJ,newdata=test,type="class")
+unpruned.miss<-sum(test$Purchase != unpruned.pred)
+unpruned.miss/length(unpruned.pred)
+
+pruned.pred<-predict(tree.pruned,newdata=test,type="class")
+pruned.miss<-sum(test$Purchase != pruned.pred)
+pruned.miss/length(pruned.pred)
+
+## We observe that our pruned tree gives a higher test error rate than the unpruned tree meaning that it misclassified more observations from the test set. This is unfortunate, but ultimately shows us that pruning may not always lead to a lower test error rate.
+```

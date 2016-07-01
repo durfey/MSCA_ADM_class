@@ -1,0 +1,234 @@
+---
+title: 'Adv Data Mining - Problem Set 3: Part 2'
+author: "Ryan Durfey"
+date: "Sunday, April 19, 2015"
+output: html_document
+---
+
+## ISLR Chapter 4, Exercise 11
+```{r}
+set.seed(8675309)
+## load relevant library and data
+library(ISLR)
+data(Auto)
+```
+
+### Part A
+```{r}
+## create binary mpg01 variable
+Auto2<-data.frame(mpg01=Auto$mpg,Auto)
+med<-median(Auto2$mpg)
+Auto2$mpg01[Auto2$mpg01<med]<-0
+Auto2$mpg01[Auto2$mpg01>=med]<-1
+
+med
+head(cbind(Auto2$mpg,Auto2$mpg01))
+```
+
+### Part B
+
+Scatterplots and Boxplots are useful for an intial exploratory analysis, so we'll create one of each for every predictor variable in relation to our dependent variable, mpg01. Furthermore, since we'll be creating those plots for every predictor (except 'origin', explained why below), we can use a for loop to automatically cycle through each one and plot the relevant data. This saves on space since we don't need to rewrite each block of code to make plots individually. Plus, I think it looks cooler. Lastly, much of our data are integers, so we won't see two points when they have the same value and overlap. The jitter() function helps this by adding some random noise to the data so that the points are spread out a bit. This way, we can see values that have a higher or lower density of observations.
+```{r}
+## exploratory data analysis
+
+## scatterplots & boxplots of all relevant variables and mpg01
+## note: we use jitter() to displace the points a bit, to give us a better idea of how dense a particular value is
+opar<-par(no.readonly=T) # save original settings
+par(mfrow=c(1,2))
+for(i in c(3,4,5,6,7,8)){
+        plot(jitter(mpg01)~jitter(Auto2[,i]),data=Auto2,xlab=names(Auto2)[i],ylab="mpg01")
+        boxplot(Auto2[,i]~mpg01,data=Auto2,horizontal=T,xlab=names(Auto2)[i],ylab="mpg01")
+        title(paste("Scatterplot & Boxplot for",names(Auto2)[i],"and mpg01"),outer=T,line=-3)
+}
+```
+
+Since origin is a non-ordered categorical variable, creating the boxplot slightly differently helps us to see a potential relationship.
+```{r}
+par(mfrow=c(1,2))
+plot(jitter(mpg01)~jitter(origin),data=Auto2)
+boxplot(mpg01~origin,data=Auto2,xlab="origin",ylab="mpg01")
+title(paste("Scatterplot & Boxplot for origin and mpg01"),outer=T,line=-3)
+
+par(opar) # return par to original settings
+```
+
+In the first plots, regarding cylinders, it appears to be pretty obvious that a lower number of cylinders corresponds to high mpg. Specifically, we can see a high density of points surrounding cylinders=4 and mpg01=1. The same can be said about cylinders=6 or cylinders=8 and mpg01=0. The boxplot adds to this by showing the median cylinders for mpg01=0 is 4 and the median for mpg01=0 is 8. Cylinders look like they could play a roll.
+
+The next predictor, displacement, is a continuous variable, so its plots look a little different. However, we can still see a distinct high-density of low displacement values with high mpg01. It might prove to be helpful predictor as well.
+
+The next two, horsepower and weight, appear similar to displacement. In the boxplots, like the first cylinders and displacement, the IQRs are completely distinct and don't overlap at all. Lower horsepower or weight tends to correspond to higher mpg01. We'll keep both of them as well since they could help our model in predicting new values of mpg01.
+
+Acceleration, however, looks to be the most vague so far. While there does seem to be a slight tendency for higher acceleration vehicles to have higher mpg01, there is a lot of overlap and could possibly be due to chance and in the boxplot, we see the IQRs overlapping quite a bit. Because of this, we'll choose to not include this variable in our initial models.
+
+Like acceleration, year isn't as straightforward as the first few predictors were. The observations are fairly spread out and the boxplot's IQRs have some overlap. However, in the scatterplot, the highest density of points for each mpg01 level appear at or near opposite extremes (not in the middle somewhere like with acceleration). Also, while the IQRs of each level overlap, the medians are not incredibly close. To not risk losing a good predictor variable, we'll keep this one for modeling.
+
+Lastly, origin is a trickier situation. Since it is a non-ordered factor (i.e., a value 3 is no closer to 2 than it is to 1). But, we can definitely see that origin=1 has a higher density of mpg01=0 while origin=2 or 3 corresponds to mpg01=1 more often. We can keep this in our model, but we'll need to make sure that the data is coded as a factor, so that our glm model will treat it as such (and not simply the numbers 1-3).
+
+Overall, after looking at each potential predictor variable, almost all of them could potentially provide prediction value in our model. We'll move forward with all of them, minus acceleration (and name, of course). This leaves us with Cylinders, Displacement, Horsepower, Weight, Year, and Origin.
+```{r}
+## make origin variable an unordered factor
+Auto2$origin<-as.factor(Auto2$origin)
+```
+
+
+### Part C
+```{r}
+set.seed(8675309)
+## split data into training and test/holdout sets - 70% train & 30% test
+samp<-sample(nrow(Auto2),.7*nrow(Auto2)) # creates random indicies
+Auto_train<-Auto2[samp,]
+Auto_test<-Auto2[-samp,]
+```
+
+### Part D
+```{r}
+library(MASS)
+
+## create LDA model predicting mpg01
+lda.mod<-lda(mpg01~cylinders+displacement+horsepower+weight+year+origin,data=Auto_train)
+
+## LDA plot
+plot(lda.mod)
+```
+
+From the plot, it looks like group 1 (mpg01=1) is easier to distinguish/predict than group 0 (mpg01=0).
+
+```{r}
+## confusion matrices for LDA model on training data
+table(Actual=Auto_train$mpg01,Predicted=predict(lda.mod)$class)
+round(prop.table(table(Actual=Auto_train$mpg01,Predicted=predict(lda.mod)$class),1),2)
+
+## confusion matrices for LDA model on test data
+table(Actual=Auto_test$mpg01,Predicted=predict(lda.mod,newdata=Auto_test)$class)
+round(prop.table(table(Actual=Auto_test$mpg01,Predicted=predict(lda.mod,newdata=Auto_test)$class),1),2)
+
+## test error
+mean(Auto_test$mpg01!=predict(lda.mod,newdata=Auto_test)$class)
+```
+
+### Part E
+```{r}
+## create QDA model predicting mpg01
+qda.mod<-qda(mpg01~cylinders+displacement+horsepower+weight+year+origin,data=Auto_train)
+
+## confusion matrices for QDA model on training data
+table(Actual=Auto_train$mpg01,Predicted=predict(qda.mod)$class)
+round(prop.table(table(Actual=Auto_train$mpg01,Predicted=predict(qda.mod)$class),1),2)
+
+## confusion matrices for QDA model on test data
+table(Actual=Auto_test$mpg01,Predicted=predict(qda.mod,newdata=Auto_test)$class)
+round(prop.table(table(Actual=Auto_test$mpg01,Predicted=predict(qda.mod,newdata=Auto_test)$class),1),2)
+
+## test error
+mean(Auto_test$mpg01!=predict(qda.mod,newdata=Auto_test)$class)
+```
+
+### Part F
+```{r}
+## create Logistic regression model
+log.mod<-glm(mpg01~cylinders+displacement+horsepower+weight+year+origin,data=Auto_train,family=binomial)
+
+## confusion matrices for Logistic model on training data
+mdp<-log.mod$fitted.values  # note: these values are identical to what we'd get using predict()
+mdp[mdp>=0.5]<-1  # here we set a prob threshold of 0.5 (we could change this of course)
+mdp[mdp<0.5]<-0
+table(Auto_train$mpg01,mdp)
+round(prop.table(table(Auto_train$mpg01,mdp),1),2)
+
+## confusion matrices for Logistic model on test data
+mdp2<-predict(log.mod,newdata=Auto_test,type="response")
+mdp2[mdp2>=0.5]<-1  # here we set a prob threshold of 0.5 (we could change this of course)
+mdp2[mdp2<0.5]<-0
+table(Auto_test$mpg01,mdp2)
+round(prop.table(table(Auto_test$mpg01,mdp2),1),2)
+
+## test error
+mean(Auto_test$mpg01!=mdp2)
+```
+
+
+### Part G
+```{r}
+library(class)
+
+## use KNN
+# k=1
+set.seed(8675309)
+knn.mod<-knn(train=Auto_train[,c(3,4,5,6,8,9)],test=Auto_test[,c(3,4,5,6,8,9)],cl=Auto_train$mpg01,k=1)
+
+## confusion matrices
+table(knn.mod,Auto_test$mpg01)
+round(prop.table(table(knn.mod,Auto_test$mpg01),1),2)
+
+## success rate with k=1
+mean(knn.mod==Auto_test$mpg01)
+## error rate with k=1
+mean(knn.mod!=Auto_test$mpg01)
+
+# k=3
+set.seed(8675309)
+knn.mod2<-knn(train=Auto_train[,c(3,4,5,6,8,9)],test=Auto_test[,c(3,4,5,6,8,9)],cl=Auto_train$mpg01,k=3)
+
+## confusion matrices
+table(knn.mod2,Auto_test$mpg01)
+round(prop.table(table(knn.mod2,Auto_test$mpg01),1),2)
+
+## success rate with k=3
+mean(knn.mod2==Auto_test$mpg01)
+## error rate with k=3
+mean(knn.mod2!=Auto_test$mpg01)
+
+# k=6
+set.seed(8675309)  # apparently have to set this here before every knn() call if k is high
+knn.mod3<-knn(train=Auto_train[,c(3,4,5,6,8,9)],test=Auto_test[,c(3,4,5,6,8,9)],cl=Auto_train$mpg01,k=6)
+
+## confusion matrices
+table(knn.mod3,Auto_test$mpg01)
+round(prop.table(table(knn.mod3,Auto_test$mpg01),1),2)
+
+## success rate with k=6
+mean(knn.mod3==Auto_test$mpg01)
+## error rate with k=6
+mean(knn.mod3!=Auto_test$mpg01)
+```
+
+Now, it's rather boring and time-consuming to keep randomly testing different sizes of k in hopes of finding the highest success rate (and therefore lowest error rate). So, instead, we can use a loop to try many different clusters automatically in order to find the best value of k.
+```{r}
+## function to plot percent correct (success rate) per number of clusters used
+k.cluster.finder<-function(train=Auto_train[,c(3,4,5,6,8,9)],test=Auto_test[,c(3,4,5,6,8,9)],cl=Auto_train$mpg01,cl.test=Auto_test$mpg01,min.clust=1,max.clust=20){
+        ret<-NULL
+        perc.correct<-c()
+        for(i in min.clust:max.clust){
+                set.seed(8675309)
+                knnmod<-knn(train=train,test=test,cl=cl,k=i)
+                perc.correct<-append(perc.correct,mean(knnmod==cl.test))
+        }
+        plot(perc.correct~c(min.clust:max.clust),type="b",xlab="Value of K",ylab="Success Rate")
+        title("Success Rate by K")
+        axis(side=1,c(min.clust:max.clust))
+        ret$max.success<-max(perc.correct)
+        ret$best.k<-c(min.clust:max.clust)[perc.correct==max(perc.correct)]
+        return(ret)
+}
+k.cluster.finder()
+```
+
+It looks like we have a winner! When k=4, we get our highest success rate of 89.83%. Since the error rate is also expressed as one minus the success rate, this means our lowest error rate is when k=4, at 10.17%.
+
+Just to double-check the work of the homegrown function above, we can manually run knn() with k=4 to confirm that we get the same success & error rates.
+```{r}
+# k=4
+set.seed(8675309)  # apparently have to set this here before every knn() call
+knn.mod4<-knn(train=Auto_train[,c(3,4,5,6,8,9)],test=Auto_test[,c(3,4,5,6,8,9)],cl=Auto_train$mpg01,k=4)
+
+## confusion matrices with k=4
+table(knn.mod4,Auto_test$mpg01)
+round(prop.table(table(knn.mod4,Auto_test$mpg01),1),2)
+
+## success rate
+mean(knn.mod4==Auto_test$mpg01)
+## error rate
+mean(knn.mod4!=Auto_test$mpg01)
+```
+
+And boom goes the dynamite.

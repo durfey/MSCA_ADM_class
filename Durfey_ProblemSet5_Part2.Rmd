@@ -1,0 +1,63 @@
+---
+title: "Adv. Data Mining - Problem Set 5 Part 2"
+author: "Ryan Durfey"
+date: "Wednesday, May 06, 2015"
+output: html_document
+---
+## ISLR Chapter 6 Exercise 9
+```{r}
+## load the data
+library(ISLR)
+college<-read.csv("College.csv",header=T)
+
+## split into training and test sets
+set.seed(8675309)
+samp<-sample(1:nrow(college),0.7*nrow(college))  # gives training indices with 70% sample
+train<-college[samp,]
+test<-college[-samp,]
+
+## linear model on training set
+lin.mod<-lm(Apps~.,data=train[,-1]) # create lin model but take out college name
+
+## find test error of that linear model
+lin.mod.pred<-predict(lin.mod,newdata=test[,-1])
+mean((test$Apps-lin.mod.pred)^2) # test MSE
+
+## fit ridge regression model on training set w/ lambda determind by CV
+library(glmnet)
+train.matrix<-model.matrix(Apps~.,data=train[,-1])
+test.matrix<-model.matrix(Apps~.,data=test[,-1])
+lambda.grid<-10^seq(4,-2,length=100)
+ridge.mod<-cv.glmnet(train.matrix,train$Apps,alpha=0,lambda=lambda.grid,thresh=1e-12)
+lambda.best<-ridge.mod$lambda.min
+lambda.best
+ridge.pred<-predict(ridge.mod,newx=test.matrix,s=lambda.best)
+mean((test$Apps-ridge.pred)^2)  # test MSE for ridge model
+
+## fit Lasso model on training set w/ lambda chosen by CV
+lasso.mod<-cv.glmnet(train.matrix,train$Apps,alpha=1,lambda=lambda.grid,thresh=1e-12)
+lambda.best<-lasso.mod$lambda.min
+lambda.best
+lasso.pred<-predict(lasso.mod,newx=test.matrix,s=lambda.best)
+mean((test$Apps-lasso.pred)^2)  # test MSE for lasso model
+#coef(lasso.mod) # coefficients used in lasso model
+
+## to report on the coefficients used in the model, we need to refit the model on the whole dataset using the lambda.best obtained from the CV above
+mod.lasso<-glmnet(model.matrix(Apps~.,data=college[,-1]),college$Apps,alpha=1)
+predict(mod.lasso,s=lambda.best,type="coefficients")
+
+```
+
+The results from each model above - OLS, Ridge, and Lasso - are not extremely different. However, the OLS did end up wtih the lowest test error MSE. That said, the Lasso also reduced the variables F.Undergrad and Books to zero.
+
+We might also look at the R-squared values for all three of the models to gauge prediction accuracy.
+```{r}
+avg.apps<-mean(college$Apps)
+lin.mod.r2<-1-mean((test$Apps-lin.mod.pred)^2)/mean((test$Apps-avg.apps)^2)
+ridge.mod.r2<-1-mean((test$Apps-ridge.pred)^2)/mean((test$Apps-avg.apps)^2)
+lasso.mod.r2<-1-mean((test$Apps-lasso.pred)^2) /mean((test$Apps-avg.apps)^2)
+
+plot(c(lin.mod.r2,ridge.mod.r2,lasso.mod.r2),col="blue",ylab="R-Squared Value",ylim=c(0.85,1),type="b",main="Test R-Squared Values",pch=19)
+```
+
+All three models have a very high R-squared value and thus have comparable prediction accuracy. OLS has the edge with both lowest test MSE and highest R-squared. However, the Lasso model was able to obtain a very similar R-squared while being able to eliminate a couple variables. Thus, if this project would want to predict future Applications based on newly gathered data, the cost of gathering those variables could affect our consideration of model quality.

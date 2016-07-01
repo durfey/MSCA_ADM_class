@@ -1,0 +1,74 @@
+---
+title: 'Adv Data Mining - Problem Set 1: Part 2'
+author: "Ryan Durfey"
+date: "Wednesday, April 08, 2015"
+output: html_document
+---
+
+```{r}
+set.seed(8675309)
+
+## read in the data & look at it
+college<-read.csv("College.csv",header=TRUE)
+
+## look at the data with fix()
+fix(college)
+
+## that won't show up in the markdown output, so look at it another way..
+str(college)
+college[1:10,]
+
+## make the first column be treated as rownames
+rownames(college)<-college[,1]
+college<-college[,-1]
+
+## use summary()
+summary(college)
+
+## use pairs()
+pairs(college[,1:10])
+
+## use plot()
+plot(college$Outstate,college$Private)
+
+## create Elite variable
+elite<-rep("No",nrow(college))
+elite[college$Top10perc > 50]<-"Yes"
+elite<-as.factor(elite)
+college$Elite<-elite
+
+## check how many Elite colleges there are with summary()
+summary(college)
+## There are 78 of them
+
+## plot Outstate vs Elite
+plot(college$Outstate,college$Elite)
+
+## use hist() for various varibles with various bin sizes
+opar<-par(no.readonly=TRUE)  # saves the default plot parameters
+par(mfrow=c(2,2))
+hist(college$Enroll,breaks=25)
+hist(college$Accept,breaks=20)
+hist(college$PhD,breaks=15)
+hist(college$Grad.Rate,breaks=5)
+par(opar)   # reverts back to original plot parameters
+
+
+
+#########################
+## further exploration ##
+#########################
+
+# we could be inerested in the relationship between full-time students and graduation rate
+plot(Grad.Rate~F.Undergrad,data=college)
+FT.GradRate<-lm(Grad.Rate~F.Undergrad,data=college)
+summary(FT.GradRate)
+## It looks like number of full-time undergraduate students doesn't really drive graduation rate
+
+# we could now perhaps look at if Elite affects graduation rate
+plot(Grad.Rate~Elite,data=college)
+Elite.GradRate<-lm(Grad.Rate~Elite,data=college)
+summary(Elite.GradRate)
+## Here, we see Elite having a larger impact on graduation rate. Thus, we might want to look more closely at this relationship with further experimentation or analysis. It is of note that while our parameter is significant, our R-Squared values are not extremely high, suggesting that our linear model may not be super strong.
+```
+

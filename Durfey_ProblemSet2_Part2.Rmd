@@ -1,0 +1,187 @@
+---
+title: 'Adv Data Mining - Problem Set 2: Part 2'
+author: "Ryan Durfey"
+date: "Tuesday, April 14, 2015"
+output: html_document
+---
+
+## ISLR Chapter 3: Exercise 10
+```{r}
+library(ISLR)
+## load in the data
+data(Carseats)
+## make copy to avoid any mishaps
+CS<-Carseats
+```
+
+### Part A
+```{r}
+## linear regression model predicting Sales, using Price, Urban, and US
+lm.mod<-lm(Sales ~ Price + Urban + US, data=CS)
+summary(lm.mod)
+```
+
+### Part B
+#### Interpretation of coefficients
+* The Intercept is just that: the intercept.
+* Price refers to the price that companies charge for car seats. We note that the coefficient is significant and that the estimate is negative, which means that Sales are negatively affected by car seat price (higher price leads to lower Sales).
+* UrbanYes corresponds to the variable Urban. This variable is qualitative, which means that when Urban=Yes, the coefficient is active (i.e., x=1), and when Urban=No, the coefficient is inactive (i.e., x=0). However, this coefficient isn't significant and we would likely end up removing it from the model.
+* USYes is similar to the above UrbanYes, except it refers to whether or not the company is in the US (instead of if it was in an urban area). It is also qualitative, but unlike UrbanYes, it is significant. The estimate is positive, so if a company is in the US, it will positively affect sales.
+
+### Part C
+```{r}
+## Y = 13.043469 - 0.054*Price - 0.022*Urban + 1.20*US
+
+# note: both Urban and US are qualitative variables with binary levels. If Urban=Yes, then its corresponding "Urban" variable in the equation will equal 1. Otherwise it will be 0. The same goes for the US variable.
+```
+
+### Part D
+Urban is the predictor for which we can reject the null hypothesis.
+
+### Part E
+```{r}
+## new model with Urban removed
+lm.mod2<-lm(Sales ~ Price + US, data=CS)
+summary(lm.mod2)
+```
+
+### Part F
+Using the R-squared values to measure fit, neither models seem to fit the data particularly well. The smaller model does only a very slightly better (Adj R-squared 0.2354 vs 0.2335 for the larger model).
+
+### Part G
+```{r}
+## 95% confidence intervals for lm.mod2 - we can use confint()
+confint(lm.mod2, level=.95)
+```
+
+### Part H
+```{r}
+## evidence of outliers or high leverage observations in lm.mod2?
+
+## outliers - use studentized residuals
+plot(lm.mod2$fitted.values,rstudent(lm.mod2))
+title("Studentized Residuals in lm.mod2")
+```
+
+There doesn't appear to be any obvious outliers present here.
+```{r}
+## high-leverage points
+leverage<-hat(model.matrix(lm.mod2))
+plot(leverage)
+title("Leverage Plot for lm.mod2")
+```
+
+Here, we can see there is one point that is higher than all the others and it is greater than 0.04. Let's look at it on a plot with Price and Sales.
+```{r}
+CS[leverage>0.04,]
+plot(Sales~Price,data=CS)
+points(CS[43,]$Price,CS[43,]$Sales,col="red")
+title("Sales by Price with High-Leverage Point (in red)")
+```
+
+
+## ISLR Chapter 3: Exercise 14
+### Part A
+```{r}
+set.seed(1)
+x1<-runif(100)
+x2<-0.5*x1+rnorm(100)/10
+y<-2+2*x1+0.3*x2+rnorm(100)
+
+## write out form of linear model
+# Y = Beta0 + Beta1*x1 + Beta2*x2
+```
+
+What are the coefficients?
+
+* Beta-hat0 = 2
+* Beta-hat1 = 2
+* Beta-hat2 = 0.3
+
+
+### Part B
+```{r}
+## correlation between x1 and x2 with a scatterplot to display the relationship
+cor(x1,x2)
+plot(x1,x2)
+## yep, they definitely look correlated
+```
+
+### Part C
+```{r}
+## least squares regression (this is given to us by lm())
+least.sq.mod<-lm(y~x1+x2)
+summary(least.sq.mod)
+```
+
+From the summary, we see the coefficient estimates, which correspond to our beta-hat values.
+
+* Beta-hat0 = 2.12305
+* Beta-hat1 = 1.4396
+* Beta-hat2 = 1.0097
+
+Note: These are not the true Beta0, Beta1, or Beta2. They are simply the estimates of them given by our model.
+
+Due to the significance of the x1 variable (corresponding to Beta-hat1), we CAN reject the null hypothesis that Beta1 = 0. However, we CANNOT reject the null hypothesis that Beta2 = 0 because the x2 variable (corresponding to Beta-hat2) is not significant.
+
+### Part D
+```{r}
+## least squares regression predicting y with only x1
+least.sq.mod2<-lm(y~x1)
+summary(least.sq.mod2)
+```
+
+With the removal of x2, the significance of x1 appears even stronger than in the earlier model. It is well below our typical threshold of 0.05, so again we CAN reject the null hypothesis of Beta1 = 0.
+
+### Part E
+```{r}
+## least squares regression predicting y with only x2
+least.sq.mod3<-lm(y~x2)
+summary(least.sq.mod3)
+```
+
+When we remove x1, we see the x2 variable become significant now. As such, we can again reject the null hypothesis that Beta1 = 0.
+
+### Part F
+The results from the model with both parameters, x1 and x2, and the model with only x2 at first appear confusing. In the first case, we concluded that the x2 parameter was not significant and thus we could not reject the null hypothesis that its coefficient equaled zero. However, in the second case, we draw the opposite conclusion. This apparent contradiction can be explained however, with consideration given to the collinearity of x1 and x2. Since we know that the correlation between x1 and x2, we are therefore not surprised that both variables appear to significantly affect the outcome (y) on their own.
+
+### Part G
+```{r}
+## refit least.sq.mod and least.sq.mod3 after adding the additional point
+x1<-c(x1,0.1)
+x2<-c(x2,0.8)
+y<-c(y,6)
+least.sq.mod.new<-lm(y~x1+x2)
+least.sq.mod3.new<-lm(y~x2)
+summary(least.sq.mod.new)
+summary(least.sq.mod3.new)
+```
+
+The addition of the new point has an affect on our interpretation of the first model (including both x1 and x2). Specifically, it makes switches the significance of each variable - now, x1 is non-significant and x2 is significant.
+
+#### Check for Outliers or High-Leverage Points
+```{r}
+## is it an outlier or high-leverage point in either/both model?
+### check for outlier
+plot(least.sq.mod.new$fitted.values,rstudent(least.sq.mod.new))
+title("Studentized Residuals of Full Model")
+plot(least.sq.mod3.new$fitted.values,rstudent(least.sq.mod3.new))
+title("Studentized Residuals of x2-only Model")
+```
+
+There don't appear to be any crazy outliers that we can see here.
+```{r}
+## is it a high-leverage point in either model?
+### check for leverage
+leverage<-hat(model.matrix(least.sq.mod.new))
+plot(leverage)
+title("Leverage Plot for Full Model")
+
+leverage<-hat(model.matrix(least.sq.mod3.new))
+plot(leverage)
+title("Leverage Plot for x2-only Model")
+```
+
+In both models, there definitely is one leverage point that is higher than all the others. It is highest within the full model though, with a leverage greater than 0.4. This is likely the reason why it affected the full model much more than the x2-only model.
+
+
