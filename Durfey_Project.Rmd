@@ -1,0 +1,417 @@
+---
+title: 'Adv. Data Mining Project - Sonar: Mines vs. Rocks'
+author: "Ryan Durfey"
+date: "Wednesday, June 10, 2015"
+output: html_document
+---
+
+# **SONAR: MINES vs. ROCKS**
+
+## Introduction
+It has been estimated that during World War II, between 600,000 and 1,000,000 sea mines were laid in various oceans and seas (http://en.wikipedia.org/wiki/Naval_mine). Many of these have gone missing or unaccounted for and still pose a threat to ships and submarines. Thus, searching and identifying potential mines has become an important task. While oftentimes detailed historical records, charting where mines were laid are useful, they are not always available. To search for unrecorded mines, sonar has been employed. However, a challenge with this approach is correctly identifying mines from benign rocks.
+
+Using frequency-modulated "chirps," sonar signals are bounced off of an object at various angles. The energy that is observed can then be analyzed and incorporated into a dataset.  For this dataset in particular, each chirp pattern is a set of 60 numbers ranging from 0.0 to 1.0. Each of the 60 variables represents a particular frequency band and each instance is the energy observed. There are 208 examples in the dataset.
+
+Our task is to accurately predict the type of object being scanned as either a mine (M) or a rock (R). We will create multiple prediction models and observe how effective each is. Additionally, due to the high number of variables/dimensions in relation to the small number of examples, employing a dimension-reduction technique (PCA) may be prove useful.
+
+## Data Preparation
+Our dataset is taken from the KEEL Dataset Repository, and can be accessed [HERE](http://sci2s.ugr.es/keel/dataset.php?cod=85 "It's Like Real Life Battleship!").
+```{r}
+set.seed(4)
+
+## load in the data
+sonar<-read.table("./sonar.dat",skip=65,sep=",")
+names(sonar)<-c(paste(rep("Band",60),1:60,sep=""),"Type")
+
+## first look at the data
+head(sonar)
+```
+
+## **UNSUPERVISED LEARNING TECHNIQUES**
+## Dimensionality Reduction: PCA
+Our inital dataset has a large number of predictors, 60, and a relatively small number of examples, 208. Due to this, it may be more difficult to create prediction models later on. Reducing the dimensionality of the data will allow us to have fewer predictors without sacrificing too much of the variation in the data. To do this, we'll perform a Principal Component Analysis.
+```{r}
+set.seed(4)
+
+## scaled data needed for PCA (with the DV removed)
+scaled_data<-scale(sonar[,-61])
+
+## initial PCA
+PCA<-prcomp(scaled_data,scaled=TRUE) # sometimes 'scaled' parameter doesn't work, so done manually above
+summary(PCA)
+
+## scree plots
+pve<-PCA$sdev^2/sum(PCA$sdev^2)
+opar<-par(no.readonly=TRUE)
+par(mfrow=c(1,2))
+plot(pve,xlab="Principal Component",ylab="Proportion of Variance Explained",ylim=c(0,1),
+     type="b")
+plot(cumsum(pve),xlab="Principal Component",
+     ylab ="Cumulative Proportion of Variance Explained",ylim=c(0,1),type="b")
+par(opar)
+```
+
+Typically with scree plots, we look for an "elbow" that signals a natural selection of components (meaning that additional components beyond the "elbow" would not add significantly more information). Unfortunately, the scree plots here do not have any obvious "elbow" to aid our selection. So, we will use a couple rules of thumb:
+
+* One rule of thumb regarding PCA is to choose components whose cumulative proportion is at least 0.8. 
+* Additionally, thinking ahead to potential models we will create, another rule of thumb is to have at least 10-15 examples for each predictor. Since we have 208 examples, we would ideally target between 13 and 20 predictors.
+
+Using both of these, we will settle on 14 Principal Components as it gives us greater than 0.8 cumulative proportion of variance and produces a nicer variable to sample size ratio.
+```{r}
+set.seed(4)
+## get final dimension-reduced dataset, adding the DV back on
+data_from_PCA<-data.frame(PCA$x[,1:14],Type=sonar$Type)
+head(data_from_PCA)
+```
+
+
+## Sidenote: PCA Aiding Visualization of K-Means Clustering
+The nature of our data and task does not necessarily call for a K-Means Cluster analysis. This is because our variables are very similar (only different frequency bands recording the same type of energy), which makes segmentation analysis not super useful. However, we will use it here for the opportunity to illustrate how the PCA done above can help visualize cluster separation.
+```{r}
+set.seed(4)
+
+## run kmeans on scaled data in iterative function form to get Variance Accounted For for various k clusters
+VAFs<-function(data,nc.min=2,nc.max=25,seed=132435){
+        set.seed(seed)
+        vaf<-0
+        for(i in nc.min:nc.max){
+                k<-kmeans(data,centers=i,nstart=100)
+                vaf[i]<-k$betweenss/k$totss
+        }
+        vaf[-1]
+}
+
+VAF<-VAFs(scaled_data,nc.max=10)
+
+## Scree Plots
+plot(2:10,VAF,type="b",xlab="Number of Clusters",ylab="Variance Accounted For")
+title("Variance Accounted For by Number of Clusters")
+```
+
+Here, again, we would like to see an obvious elbow on the scree plots to help us choose an appropriate number of clusters. This scree plot doesn't give us a great elbow. However, we get the sharpest angle at k=3, so we'll go with that.
+```{r}
+set.seed(4)
+library(knitr)
+
+## After choosing 3 Clusters, running kmeans again
+K3<-kmeans(scaled_data,centers=3,nstart=100)
+## number of observations in each cluster
+kable(as.data.frame(table(K3$cluster)),col.names=c("Cluster","# of Obs."),
+      caption="Observations per Cluster")
+```
+
+Now that we have our clusters, we can plot some variables against one another to visualize the separation among cluster. However, as we'll see, high-dimensional datasets such as this one make it difficult to distinguish between clusters.
+```{r}
+set.seed(4)
+library(vegan)
+## plot various IV's with color for clusters
+par(mfrow=c(2,2),mar=c(4,4,1,0))
+plot(scaled_data[,1], scaled_data[,2],col=K3$cluster,pch=16)
+title("Band1 vs. Band2")
+# plot spiderweb and connect outliners with dotted line
+ord<-cbind(scaled_data[,1], scaled_data[,2])
+ordispider(ord, factor(K3$cluster), label = TRUE)
+ordihull(ord, factor(K3$cluster), lty = "dotted")
+
+plot(scaled_data[,2], scaled_data[,3],col=K3$cluster,pch=16)
+title("Band2 vs. Band3")
+# plot spiderweb and connect outliners with dotted line
+ord<-cbind(scaled_data[,2], scaled_data[,3])
+ordispider(ord, factor(K3$cluster), label = TRUE)
+ordihull(ord, factor(K3$cluster), lty = "dotted")
+
+plot(scaled_data[,1], scaled_data[,3],col=K3$cluster,pch=16)
+title("Band1 vs. Band3")
+# plot spiderweb and connect outliners with dotted line
+ord<-cbind(scaled_data[,1], scaled_data[,3])
+ordispider(ord, factor(K3$cluster), label = TRUE)
+ordihull(ord, factor(K3$cluster), lty = "dotted")
+
+plot(scaled_data[,2], scaled_data[,4],col=K3$cluster,pch=16)
+title("Band2 vs. Band4")
+# plot spiderweb and connect outliners with dotted line
+ord<-cbind(scaled_data[,2], scaled_data[,4])
+ordispider(ord, factor(K3$cluster), label = TRUE)
+ordihull(ord, factor(K3$cluster), lty = "dotted")
+par(opar)
+```
+
+Not very pretty. The clusters look to be all over each other. Since the data's variation is spread out among 60 predictors, it's near impossible to visualize the clusters on two-dimensional plots. But, utilizing the data outputted from the above PCA, we'll get a much nicer picture. This is due to the first few components comprising the bulk of the variation.
+```{r}
+set.seed(4)
+# plot first 2 Principal Components w/ same Cluster Coloring
+plot(data_from_PCA[,1], data_from_PCA[,2],col=K3$cluster,pch=16)
+# plot spiderweb and connect outliners with dotted line
+ord<-cbind(data_from_PCA[,1], data_from_PCA[,2])
+ordispider(ord, factor(K3$cluster), label = TRUE)
+ordihull(ord, factor(K3$cluster), lty = "dotted")
+title("PC1 vs. PC2 with K-Mean Clustering")
+
+```
+
+A much more palatable visual solution! Now on to some supervised learning methods where we will predict Rocks vs. Mines.
+
+
+## **SUPERVISED LEARNING TECHNIQUES**
+Below, we explore different kinds of predictive models aimed at accurately classifying objects as rocks or mines. For each, we will use K-Fold Cross Validation to judge the accuracy of the models. A Train/Test Split Validation was also considered for this task. However, since the overall dataset is small, the results would be affected greatly by which specific test points were randomly chosen. K-Fold Cross Validation will look at multiple test sets, which will mitigate the influence of any one in particular.
+
+For each model, there is a tuneable parameter that we will also try to optimize. To do this, we will Cross Validate the models over a wide range of these parameters. For each model, these are:
+
+* Logistic Regression - thresh: threshold at which a predicted probability is classified as a Mine or Rock.
+* Random Forest - mtry: number of variables randomly sampled at each split in each tree.
+* Support Vector Machine - cost: the cost of constraint violation.
+
+After Cross Validating a model for each tuneable parameter value, we'll observe two different measures of accuracy: Area Under ROC Curve (to be maximized) & Misclassification Rate (to be minimized). Hopefully, the best of both of these will align with the same parameter value.
+
+First, we'll do some brief data prep for our cross validations. Randomizing the observations in our dataset will ensure that each fold will be as representative of the whole dataset as possible.
+
+### Data Prep for Cross Validation
+```{r message=FALSE}
+set.seed(4)
+library(bestglm)
+library(randomForest)
+library(ROSE) # for roc.curve() to get AUC
+library(e1071)
+
+#### Data Partition Prepping ####
+
+## We can't assume our data is in a random order (in fact, it's not), so will randomize it
+rand_order<-sample(1:nrow(sonar))
+data<-sonar[rand_order,]
+
+## Set number of folds we'll use
+k<-8  # number of folds
+## note: chose k=8 because 8 divides evenly into 208, which helps us avoid going out of bounds with the test sets
+n<-floor(nrow(data)/k)  # size of each fold
+```
+
+### Logistic Regression
+```{r}
+set.seed(4)
+## logistic model on raw data
+log_mod_raw<-glm(Type~.,data=data,family=binomial)
+```
+
+Immediately, we see warning messages regarding the algorithm not converging and that fitted probabilities numerically 0 or 1 occurred. These are potentially due to the high number of predictors that we have. As such, this feels like a good opportunity to use our dimension-reduced dataset that was produced from the PCA above.
+```{r}
+set.seed(4)
+
+## redoing some data prep steps on PCA data
+data_from_PCA<-data_from_PCA[rand_order,]
+
+## logistic model on PCA-dimension-reduced data
+log_mod_PCA<-glm(Type~.,data=data_from_PCA,family=binomial)  # runs OK
+
+#### Determine if any variables should be dropped to better the model
+## run drop1() to determine which variables should be dropped
+drop1(log_mod_PCA)
+## run betstglm() to see if it agrees
+bestglm(data_from_PCA,family=binomial)
+```
+
+Both drop1() and bestglm() agree that dropping PC4, PC5, PC6, PC8, PC11, PC12, and PC13 will improve our logistic model. So, we'll only keep the remaining seven PC variables and proceed with Cross Validation and Parameter Optimization.
+```{r}
+set.seed(4)
+########################################################
+#### CV & Threshold Optimization for Logistic Model ####
+########################################################
+
+# set vectors to catch AUC and Misclassification Rates
+err_vect<-rep(NA,k)
+mis_vect<-rep(NA,k)
+
+## set thresholds to test with. We'll range between 0.1 and 0.9 by 0.05
+thresh<-seq(0.1,.9,.05)
+thresh_auc<-c()
+thresh_mis<-c()
+
+for (j in thresh){
+        for (i in 1:k){
+                ## make subsets for each fold
+                s1<-((i-1)*n+1)  # start of subset
+                s2<-(i*n)  # end of subset
+                subset<-s1:s2  # range of the subset
+        
+                cv_train<-data_from_PCA[-subset,]  # train data to make model with
+                cv_test<-data_from_PCA[subset,]  # test data to test performance
+        
+                ## fit model on train set - set formula to only use significant variables
+                fit<-glm(Type~PC1+PC2+PC3+PC7+PC9+PC10+PC14,data=cv_train,family=binomial)
+                ## make prediction on test set
+                prediction<-predict(fit,newdata=cv_test,type="response")
+        
+                ## turn probabilities into Mine/Rock output according to threshold
+                predclass<-prediction
+                predclass[predclass >= j]<-'R'
+                predclass[predclass != 'R']<-'M'
+                
+                ## calculate model accuracy per i-th fold
+                err_vect[i]<-roc.curve(cv_test[,15],predclass,plotit=FALSE)$auc
+                mis_vect[i]<-mean(predclass!=cv_test[,15])
+                #print(paste("AUC for fold", i, ":",err_vect[i]))
+                #print(paste("Misclassification Rate for fold", i, ":",mis_vect[i]))
+        }
+        thresh_auc<-append(thresh_auc,mean(err_vect))  # collect mean AUC per each threshold
+        thresh_mis<-append(thresh_mis,mean(mis_vect))  # collect mean Miscl. Rate per each threshold
+}
+
+## plot Threshold vs. AUC and Misclassification Rate
+par(mfrow=c(2,1))
+plot(thresh,thresh_auc)
+title("Log Model AUC by Threshold")
+plot(thresh,thresh_mis)
+title("Log Model Misclass. Rate by Threshold")
+
+## find Thresholds for best AUC's and best M.R.
+thresh_all<-data.frame(thresh,thresh_auc,thresh_mis)
+head(thresh_all[order(-thresh_all$thresh_auc),],3)  ## show top 3 three best AUC
+head(thresh_all[order(thresh_all$thresh_mis),],3)  ## show top 3 best Misclassification Rate
+```
+
+Comparing the best AUC and best Misclassification Rates, thresh=0.45 gives us the best of both. So, if we choose this model in the end, we would proceed with these settings.
+```{r}
+set.seed(4)
+## now fit logistic model with optimized threshold parameter
+log_mod_final<-glm(Type~PC1+PC2+PC3+PC7+PC9+PC10+PC14,data=data_from_PCA,family=binomial)
+threshold<-0.45
+```
+
+After Cross-Validation and Parameter Optimization, our Logistic model gives us an Area Under ROC Curve of 0.8028 and a misclassification rate of 0.2019. This doesn't look particularly sexy, but its less-than-stellar performance may be due to using the dimension-reduced PCA output instead of the entire original dataset. Let's see if a Random Forest model can do any better.
+
+
+### Random Forest Model
+A Random Forest model works much differently than the Logistic one above. Thus, we may not have a problem using the original dataset with all 60 predictors.
+```{r}
+set.seed(4)
+## initial random forest model on full dataset
+rf_mod<-randomForest(x=data[,-61],y=data[,61]) # runs OK
+```
+
+The Random Forest Model runs just fine on the full 60-predictor dataset, so we won't need to use the dimension-reduced set and risk losing useful information.
+```{r}
+set.seed(4)
+########################################################
+#### CV & Mtry Optimization for Random Forest Model ####
+########################################################
+err_vect<-rep(NA,k)
+mis_vect<-rep(NA,k)
+
+## mtry is tuneable paramter that we'll iterate through and CV each one
+mtry<-seq(1,60,1) ## test mtry with every number of variables, 1 to 60
+mtry_auc<-rep(NA,length(mtry))
+mtry_mis<-rep(NA,length(mtry))
+
+for (j in mtry){
+        for (i in 1:k){
+                ## make subsets for each fold
+                s1<-((i-1)*n+1)  # start of subset
+                s2<-(i*n)  # end of subset
+                subset<-s1:s2  # range of the subset
+        
+                cv_train<-data[-subset,]  # train data to make model with
+                cv_test<-data[subset,]  # test data to test performance
+        
+                ## fit model on train set
+                fit<-randomForest(x=cv_train[,-61],y=cv_train[,61],mtry=j)
+                ## make prediction on test set
+                prediction<-predict(fit,newdata=cv_test[,-61],type="response")
+        
+                ## calculate model accuracy per i-th fold
+                err_vect[i]<-roc.curve(cv_test[,61],prediction,plotit=FALSE)$auc
+                mis_vect[i]<-mean(prediction!=cv_test[,61])
+                #print(paste("AUC for fold", i, ":",err_vect[i]))
+                #print(paste("Misclassification Rate for fold", i, ":",mis_vect[i]))
+        }
+        mtry_auc[j]<-mean(err_vect)
+        mtry_mis[j]<-mean(mis_vect)
+}
+## plot mtry vs. AUC and Misclassification Rate
+par(mfrow=c(2,1))
+plot(mtry,mtry_auc)
+title("RF Model AUC by mtry")
+plot(mtry,mtry_mis)
+title("RF Model Misclass. Rate by mtry")
+
+## find mtry values for best AUC's and best M.R.
+mtry_all<-data.frame(mtry,mtry_auc,mtry_mis)
+head(mtry_all[order(-mtry_all$mtry_auc),],3)  ## show top 3 three best AUC
+head(mtry_all[order(mtry_all$mtry_mis),],3)  ## show top 3 best Misclassification Rate
+## There are many values of mtry that give the same M.R. minimum, 0.1490. So we choose the best AUC that aligns with this.
+
+## We have a winner. Now, we can fit our final Random Forest Model with mtry=30 on the entire dataset
+rf_mod_final<-randomForest(x=data[,-61],y=data[,61],mtry=30)
+```
+
+The Random Forest model, using all 60 predictors, did quite a bit better than the Logistic Model with the PCA-given data. Setting mtry=30 gives us the best AUC and Misclassification Rate, with scores 0.8531 and 0.1490, respectively.
+
+### Support Vector Machine Model
+```{r}
+set.seed(4)
+##############################################
+#### CV & Cost Optimization for SVM Model ####
+##############################################
+
+# reset vectors to catch AUC and Misclassification Rates
+err_vect<-rep(NA,k)
+mis_vect<-rep(NA,k)
+
+## cost is tuneable parameter for SVMs
+cost<-seq(1,50,1)
+cost_auc<-rep(NA,length(cost))
+cost_mis<-rep(NA,length(cost))
+
+for (j in cost){
+        for (i in 1:k){
+                ## make subsets for each fold
+                s1<-((i-1)*n+1)  # start of subset
+                s2<-(i*n)  # end of subset
+                subset<-s1:s2  # range of the subset
+        
+                cv_train<-data[-subset,]  # train data to make model with
+                cv_test<-data[subset,]  # test data to test performance
+        
+                ## fit model on train set
+                fit<-svm(Type~.,data=cv_train,cost=j,kernel="radial")  
+                ## note: exploratorily tested other kernels; radial was best by far
+                
+                ## make prediction on test set
+                prediction<-predict(fit,newdata=cv_test[,-61])
+        
+                ## calculate model accuracy per i-th fold
+                err_vect[i]<-roc.curve(cv_test[,61],prediction,plotit=FALSE)$auc
+                mis_vect[i]<-mean(prediction!=cv_test[,61])
+                #print(paste("AUC for fold", i, ":",err_vect[i]))
+                #print(paste("Misclassification Rate for fold", i, ":",mis_vect[i]))
+        }
+        cost_auc[j]<-mean(err_vect)
+        cost_mis[j]<-mean(mis_vect)
+}
+
+## plot cost vs. AUC and Misclassification Rate
+par(mfrow=c(2,1))
+plot(cost,cost_auc)
+title("SVM AUC by Cost")
+plot(cost,cost_mis)
+title("SVM Model Misclass. Rate by Cost")
+
+## find cost values for best AUC's and best M.R.
+cost_all<-data.frame(cost,cost_auc,cost_mis)
+head(cost_all[order(-cost_all$cost_auc),],5)  ## show top 5 three best AUC
+head(cost_all[order(cost_all$cost_mis),],5)  ## show top 5 best Misclassification Rate
+
+## Once again, we have agreement between the best AUC and best Misclass Rate.
+## Any cost between 4 and 8 will do it seems.
+## We'll pick in the middle, cost=6, and fit the final model on the entire dataset
+svm_mod_final<-svm(Type~.,data=data,cost=6,kernel="radial")
+```
+
+The Support Vector Machine model has done even better than Random Forest model! With the optimized cost parameter of 6, its observed AUC, 0.8860, is the highest, and its Misclassification Rate, 0.1154, is lowest of the three models tested in this analysis.
+
+```{r}
+kable(data.frame(Tuneable.Param=c(0.45,10,6),AUC=c(0.8028,0.8531,0.8860),Misclass.Rate=c(0.2019,0.1490,0.1154),row.names=c("Logistic Model","Random Forest Model","SVM Model")))
+```
+
+## Conclusion
+We were able to Cross Validate and Optimize three different types of models in the task of sea mine detection. Additionally, a Principal Component Analysis helped create a modified dataset with fewer dimensions and also illustrated a way to better visualize K-Means Cluster separation.
+
+Ultimately, for our intended task, the Support Vector Machine performed the best out of the three. Therefore, for any future Sea Mine/Rock Differentiation tasks, this SVM Model is the one we would utilize.
